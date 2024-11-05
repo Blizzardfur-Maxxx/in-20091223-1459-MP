@@ -10,7 +10,7 @@ public class EntityLiving extends Entity {
 	public float prevRenderYawOffset = 0.0F;
 	private float rotationYawHead;
 	private float prevRotationYawHead;
-	public int maxAir = 10;
+	private int maxAir = 10;
 	public int health;
 	public int prevHealth;
 	public int scoreValue = 0;

@@ -31,7 +31,7 @@ net/minecraft/client/gui/GuiScreen 4e0355165535fe41697511de2350189d
 net/minecraft/client/gui/GuiSmallButton 524513adf417b7342ed2b3d2975dab95
 net/minecraft/client/KeyBinding 7e4d0af02eb601f58d1a9820d45080fc
 net/minecraft/client/LoadingScreenRenderer 5b0e43e268f29ccc4a339687921edecc
-net/minecraft/client/Minecraft b0cae33e52723be527813f816ee5a175
+net/minecraft/client/Minecraft bc9187fc4d647d538ab4527bf62d08bd
 net/minecraft/client/MinecraftApplet c7121b6134b21880c3fb632523347d6c
 net/minecraft/client/MinecraftError 23bc75652b3ea8d47c68028bc6824699
 net/minecraft/client/model/md3/MD3Buffers 7faed70a61610c147221866dd97a6824
@@ -85,7 +85,7 @@ net/minecraft/client/Timer 2708e3623ba9eae38ae46a4e2e9ee754
 net/minecraft/game/entity/AI d6dc2bd3187f4933bf2434e74115d936
 net/minecraft/game/entity/AILiving bf4bac2e955450e4ab5adeb949ce8b6d
 net/minecraft/game/entity/Entity 46c4f0426b029d99b447d985f17cddc0
-net/minecraft/game/entity/EntityLiving bf2666dd6ccb926884ad83a2b222ae46
+net/minecraft/game/entity/EntityLiving b3616de21ac3de67d7c8fe288de40442
 net/minecraft/game/level/block/Block ab444c6d58c7d2a33a9af9ce6a0c5eb5
 net/minecraft/game/level/block/BlockBookshelf f823d477996d10d983f275747e6a356d
 net/minecraft/game/level/block/BlockDirt 9f25e9fc839169e7e80399474d62a773

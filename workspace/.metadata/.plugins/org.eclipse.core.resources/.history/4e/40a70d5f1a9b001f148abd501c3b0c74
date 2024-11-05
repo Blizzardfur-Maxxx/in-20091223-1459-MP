@@ -6,7 +6,10 @@ import java.awt.Component;
 import java.awt.MouseInfo;
 import java.awt.Point;
 import java.awt.Robot;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.nio.IntBuffer;
 import javax.swing.JOptionPane;
 
@@ -16,6 +19,7 @@ import net.minecraft.client.effect.EffectRenderer;
 import net.minecraft.client.effect.EntityDiggingFX;
 import net.minecraft.client.effect.EntityFX;
 import net.minecraft.client.effect.EntityRainFX;
+import net.minecraft.client.gui.ChatScreen;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiErrorScreen;
 import net.minecraft.client.gui.GuiGameOver;
@@ -23,6 +27,10 @@ import net.minecraft.client.gui.GuiIngame;
 import net.minecraft.client.gui.GuiIngameMenu;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.model.ModelBiped;
+import net.minecraft.client.net.Client;
+import net.minecraft.client.net.NetworkPlayer;
+import net.minecraft.client.net.Packet;
+import net.minecraft.client.net.SocketConnection;
 import net.minecraft.client.player.EntityPlayer;
 import net.minecraft.client.player.InventoryPlayer;
 import net.minecraft.client.player.MovementInputFromKeys;
@@ -37,6 +45,7 @@ import net.minecraft.client.render.texture.TextureFX;
 import net.minecraft.client.render.texture.TextureLavaFX;
 import net.minecraft.client.render.texture.TextureWaterFX;
 import net.minecraft.client.render.texture.TextureWaterFlowFX;
+import net.minecraft.game.level.LevelIO;
 import net.minecraft.game.level.World;
 import net.minecraft.game.level.block.Block;
 import net.minecraft.game.level.generator.LevelGenerator;
@@ -76,27 +85,31 @@ public final class Minecraft implements Runnable {
 	private Cursor cursor;
 	public RenderEngine renderEngine;
 	public FontRenderer fontRenderer;
-	private GuiScreen currentScreen = null;
+	public GuiScreen currentScreen = null;
 	private LoadingScreenRenderer loadingScreen = new LoadingScreenRenderer(this);
 	public EntityRenderer entityRenderer = new EntityRenderer(this);
 	private ThreadDownloadResources downloadResourcesThread;
 	private int ticksRan = 0;
 	private int leftClickCounter = 0;
 	private Robot mouseRobot;
-	private GuiIngame ingameGUI;
+	public GuiIngame ingameGUI;
+	public boolean skipRenderWorld = false;
 	public MovingObjectPosition objectMouseOver;
 	public GameSettings options;
 	String serverIp;
+	int port;
 	public volatile boolean running;
 	public String debug;
 	private boolean inventoryScreen;
 	private int prevFrameTime;
 	public boolean thirdPersonView;
+	public Client networkClient;
 
 	public Minecraft(Canvas canvas1, int i2, int i3, boolean z4) {
 		new ModelBiped(0.0F);
 		this.objectMouseOver = null;
-		this.serverIp = null;
+		this.serverIp = "0";
+		this.port = 25565;
 		this.running = false;
 		this.debug = "";
 		this.inventoryScreen = false;
@@ -139,6 +152,7 @@ public final class Minecraft implements Runnable {
 						} catch (LWJGLException lWJGLException4) {
 							lWJGLException4.printStackTrace();
 						}
+					this.skipRenderWorld = false;
 					} else {
 						Mouse.setGrabbed(false);
 					}
@@ -272,9 +286,7 @@ public final class Minecraft implements Runnable {
 			this.renderGlobal = new RenderGlobal(this, this.renderEngine);
 			GL11.glViewport(0, 0, this.displayWidth, this.displayHeight);
 			if(this.serverIp != null && this.session != null) {
-				World world43;
-				(world43 = new World()).generate(8, 8, 8, new byte[512]);
-				this.setLevel(world43);
+				this.networkClient = new Client(this, this.serverIp, this.port, this.session.username, this.session.mpPass);
 			} else {
 				boolean z9 = false;
 				point10 = null;
@@ -301,6 +313,9 @@ public final class Minecraft implements Runnable {
 			checkGLError("Post startup");
 			this.ingameGUI = new GuiIngame(this, this.displayWidth, this.displayHeight);
 			(new ThreadDownloadSkin(this)).start();
+			if(this.serverIp != null && this.session != null) {
+				this.networkClient = new Client(this, this.serverIp, this.port, this.session.username, this.session.mpPass);
+			}
 		} catch (Exception exception36) {
 			exception36.printStackTrace();
 			JOptionPane.showMessageDialog((Component)null, exception36.toString(), "Failed to start Minecraft", 0);
@@ -365,7 +380,9 @@ public final class Minecraft implements Runnable {
 
 						checkGLError("Pre render");
 						GL11.glEnable(GL11.GL_TEXTURE_2D);
-						this.playerController.setPartialTime(this.timer.renderPartialTicks);
+						if (this.playerController != null) {
+	                    	this.playerController.setPartialTime(this.timer.renderPartialTicks);
+	                    }
 						float f41 = this.timer.renderPartialTicks;
 						EntityRenderer entityRenderer39 = this.entityRenderer;
 						if(this.entityRenderer.displayActive && !Display.isActive()) {
@@ -426,7 +443,7 @@ public final class Minecraft implements Runnable {
 						i49 = i45 - Mouse.getY() * i45 / entityRenderer39.mc.displayHeight - 1;
 						if(entityRenderer39.mc.theWorld != null) {
 							entityRenderer39.updateCameraAndRender(f41);
-							entityRenderer39.mc.ingameGUI.renderGameOverlay(f41);
+							entityRenderer39.mc.ingameGUI.renderGameOverlay(f41, true, displayWidth, displayHeight);
 						} else {
 							GL11.glViewport(0, 0, entityRenderer39.mc.displayWidth, entityRenderer39.mc.displayHeight);
 							GL11.glClearColor(0.0F, 0.0F, 0.0F, 0.0F);
@@ -499,8 +516,98 @@ public final class Minecraft implements Runnable {
 			this.displayGuiScreen(new GuiIngameMenu());
 		}
 	}
+	
+	private void clickMouse(int id) {
+		if(id != 0 || this.leftClickCounter <= 0) {
+			ItemRenderer tileRenderer6;
+			if(id == 0) {
+				tileRenderer6 = this.entityRenderer.itemRenderer;
+				this.entityRenderer.itemRenderer.swingProgress = -1;
+				tileRenderer6.itemSwingState = true;
+			}
 
-	private void clickMouse(int i1) {
+			int i2;
+			if(id == 1 && (i2 = this.thePlayer.inventory.getCurrentItem()) > 0 && this.playerController.removeResource(this.thePlayer, i2)) {
+				tileRenderer6 = this.entityRenderer.itemRenderer;
+				this.entityRenderer.itemRenderer.equippedProgress = 0.0F;
+			} else if(this.objectMouseOver == null) {
+				if(id == 0 && !(this.playerController instanceof PlayerControllerCreative)) {
+					this.leftClickCounter = 10;
+				}
+
+			} else {
+				if(this.objectMouseOver.typeOfHit == 1) {
+					if(id == 0) {
+						this.objectMouseOver.entityHit.attackEntityFrom(this.thePlayer, 4);
+						return;
+					}
+				} else if(this.objectMouseOver.typeOfHit == 0) {
+					i2 = this.objectMouseOver.blockX;
+					int i3 = this.objectMouseOver.blockY;
+					int i4 = this.objectMouseOver.blockZ;
+					if(id != 0) {
+						if(this.objectMouseOver.sideHit == 0) {
+							--i3;
+						}
+
+						if(this.objectMouseOver.sideHit == 1) {
+							++i3;
+						}
+
+						if(this.objectMouseOver.sideHit == 2) {
+							--i4;
+						}
+
+						if(this.objectMouseOver.sideHit == 3) {
+							++i4;
+						}
+
+						if(this.objectMouseOver.sideHit == 4) {
+							--i2;
+						}
+
+						if(this.objectMouseOver.sideHit == 5) {
+							++i2;
+						}
+					}
+
+					Block block9 = Block.blocksList[this.theWorld.getBlockId(i2, i3, i4)];
+					if(id == 0) {
+						if(block9 != Block.bedrock || this.thePlayer.userType >= 100) {
+							this.playerController.clickBlock(i2, i3, i4);
+							return;
+						}
+					} else {
+						if((id = this.thePlayer.inventory.getCurrentItem()) <= 0) {
+							return;
+						}
+
+						Block tile9;
+						AxisAlignedBB aABB10;
+						if(((tile9 = Block.blocksList[this.theWorld.getBlockId(i2, i3, i4)]) == null || tile9 == Block.waterStill || tile9 == Block.waterStill || tile9 == Block.lavaStill || tile9 == Block.lavaStill) && ((aABB10 = Block.blocksList[id].getCollisionBoundingBoxFromPool(i2, i3, i4)) == null || (this.thePlayer.boundingBox.intersects(aABB10) ? false : this.theWorld.checkIfAABBIsClear(aABB10)))) {
+							if(!this.playerController.removeResource(id)) {
+								return;
+							}
+
+							if(this.isOnlineClient()) {
+								this.networkClient.sendTileUpdated(i2, i3, i4, id, id);
+							}
+
+							this.theWorld.netSetTile(i2, i3, i4, id);
+							tileRenderer6 = this.entityRenderer.itemRenderer;
+							this.theWorld.setBlockWithNotify(i2, i3, i4, id);
+
+							this.entityRenderer.itemRenderer.equippedProgress = 0.0F;
+							Block.blocksList[id].onBlockPlaced(this.theWorld, i2, i3, i4);
+						}
+					}
+				}
+
+			}
+		}
+	}
+
+	private void clickMouseold(int i1) {
 		if(i1 != 0 || this.leftClickCounter <= 0) {
 			ItemRenderer itemRenderer5;
 			if(i1 == 0) {
@@ -574,18 +681,33 @@ public final class Minecraft implements Runnable {
 								}
 							}
 
-							if(!this.playerController.canPlace(i1)) {
+						} else {
+							int i8;
+							if((i8 = this.thePlayer.inventory.getCurrentItem()) <= 0) {
 								return;
 							}
 
+							Block tile9;
+							AxisAlignedBB aABB10;
+							if(((tile9 = Block.blocksList[this.theWorld.getBlockId(i2, i3, i4)]) == null || tile9 == Block.waterStill || tile9 == Block.waterStill || tile9 == Block.lavaStill || tile9 == Block.lavaStill) && ((aABB10 = Block.blocksList[i8].getCollisionBoundingBoxFromPool(i2, i3, i4)) == null || (this.thePlayer.boundingBox.intersects(aABB10) ? false : this.theWorld.checkIfAABBIsClear(aABB10)))) {
+								if(!this.playerController.removeResource(i8)) {
+									return;
+								}
+
+								if(this.isOnlineClient()) {
+									this.networkClient.sendTileUpdated(i2, i3, i4, i1, i8);
+								}
+							this.theWorld.netSetTile(i2, i3, i4, i1);
+							itemRenderer5 = this.entityRenderer.itemRenderer;
 							this.theWorld.setBlockWithNotify(i2, i3, i4, i1);
 							this.entityRenderer.itemRenderer.equippedProgress = 0.0F;
 							Block.blocksList[i1].onBlockPlaced(this.theWorld, i2, i3, i4);
 						}
 					}
 				}
-
+			  }
 			}
+		
 		}
 	}
 
@@ -596,7 +718,6 @@ public final class Minecraft implements Runnable {
 
 		int i2;
 		for(i2 = 0; i2 < guiIngame1.chatMessageList.size(); ++i2) {
-			++((ChatLine)guiIngame1.chatMessageList.get(i2)).updateCounter;
 		}
 
 		GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.renderEngine.getTexture("/terrain.png"));
@@ -610,6 +731,251 @@ public final class Minecraft implements Runnable {
 			renderEngine13.imageData.put(textureFX3.imageData);
 			renderEngine13.imageData.position(0).limit(textureFX3.imageData.length);
 			GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, textureFX3.iconIndex % 16 << 4, textureFX3.iconIndex / 16 << 4, 16, 16, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, renderEngine13.imageData);
+		}
+		
+		int i41;
+		int i8;
+		int i38;
+		int i46;
+		int i47;
+
+	    if (this.networkClient != null && !(this.currentScreen instanceof GuiErrorScreen)) {
+	        if (!this.networkClient.isConnected()) {
+	            this.loadingScreen.displayLoadingString("Connecting..");
+	            this.loadingScreen.setLoadingProgress(0);
+	        } else {
+				Client client18 = this.networkClient;
+				if(this.networkClient.processData) {
+					SocketConnection socketConnection22 = client18.serverConnection;
+					if(client18.serverConnection.connected) {
+						try {
+							SocketConnection socketConnection21 = client18.serverConnection;
+							client18.serverConnection.socketChannel.read(socketConnection21.readBuffer);
+							i41 = 0;
+
+							while(socketConnection21.readBuffer.position() > 0 && i41++ != 100) {
+								socketConnection21.readBuffer.flip();
+								byte b5 = socketConnection21.readBuffer.get(0);
+								Packet packet6;
+								if((packet6 = Packet.PACKETS[b5]) == null) {
+									throw new IOException("Bad command: " + b5);
+								}
+
+								if(socketConnection21.readBuffer.remaining() < packet6.size + 1) {
+									socketConnection21.readBuffer.compact();
+									break;
+								}
+
+								socketConnection21.readBuffer.get();
+								Object[] object7 = new Object[packet6.fields.length];
+
+								for(i8 = 0; i8 < object7.length; ++i8) {
+									object7[i8] = socketConnection21.read(packet6.fields[i8]);
+								}
+
+								Client client43 = socketConnection21.client;
+								if(socketConnection21.client.processData) {
+									if(packet6 == Packet.LOGIN) {
+										client43.minecraft.loadingScreen.displayProgressMessage(object7[1].toString());
+										client43.minecraft.loadingScreen.displayLoadingString(object7[2].toString());
+										//client43.minecraft.thePlayer.userType = ((Byte)object7[3]).byteValue();
+									} else if(packet6 == Packet.LEVEL_INITIALIZE) {
+										client43.minecraft.setLevel((World)null);
+										client43.levelBuffer = new ByteArrayOutputStream();
+									} else if(packet6 == Packet.LEVEL_DATA_CHUNK) {
+										short s11 = ((Short)object7[0]).shortValue();
+										byte[] b12 = (byte[])((byte[])object7[1]);
+										byte b13 = ((Byte)object7[2]).byteValue();
+										client43.minecraft.loadingScreen.setLoadingProgress(b13);
+										client43.levelBuffer.write(b12, 0, s11);
+									} else if(packet6 == Packet.LEVEL_FINALIZE) {
+										try {
+											client43.levelBuffer.close();
+										} catch (IOException iOException14) {
+											iOException14.printStackTrace();
+										}
+
+										byte[] b56 = LevelIO.loadBlocks(new ByteArrayInputStream(client43.levelBuffer.toByteArray()));
+										client43.levelBuffer = null;
+										short s59 = ((Short)object7[0]).shortValue();
+										short s62 = ((Short)object7[1]).shortValue();
+										short s27 = ((Short)object7[2]).shortValue();
+										World level30;
+										(level30 = new World()).setNetworkMode(true);
+										level30.generate(s59, s62, s27, b56);
+										client43.minecraft.setLevel(level30);
+										client43.minecraft.skipRenderWorld = false;
+										client43.connected = true;
+									} else if(packet6 == Packet.SET_TILE) {
+										if(client43.minecraft.theWorld != null) {
+											client43.minecraft.theWorld.netSetTile(((Short)object7[0]).shortValue(), ((Short)object7[1]).shortValue(), ((Short)object7[2]).shortValue(), ((Byte)object7[3]).byteValue());
+										}
+									} else {
+										byte b10;
+										byte b10001;
+										short s10003;
+										short s10004;
+										String string33;
+										NetworkPlayer networkPlayer34;
+										short s36;
+										short s45;
+										if(packet6 == Packet.PLAYER_JOIN) {
+											b10001 = ((Byte)object7[0]).byteValue();
+											String string10002 = (String)object7[1];
+											s10003 = ((Short)object7[2]).shortValue();
+											s10004 = ((Short)object7[3]).shortValue();
+											short s10005 = ((Short)object7[4]).shortValue();
+											byte b10006 = ((Byte)object7[5]).byteValue();
+											byte b57 = ((Byte)object7[6]).byteValue();
+											b10 = b10006;
+											short s9 = s10005;
+											s45 = s10004;
+											s36 = s10003;
+											string33 = string10002;
+											b5 = b10001;
+											if(b5 >= 0) {
+												b10 = (byte)(b10 + 128);
+												s45 = (short)(s45 - 22);
+												networkPlayer34 = new NetworkPlayer(client43.minecraft, b5, string33, s36, s45, s9, (float)(b10 * 360) / 256.0F, (float)(b57 * 360) / 256.0F);
+												client43.players.put(b5, networkPlayer34);
+												client43.minecraft.theWorld.spawnEntityInWorld(networkPlayer34);
+											} else {
+												client43.minecraft.theWorld.setSpawnLocation(s36 / 32, s45 / 32, s9 / 32, (float)(b10 * 320 / 256));
+												client43.minecraft.thePlayer.setPositionAndRotation((float)s36 / 32.0F, (float)s45 / 32.0F, (float)s9 / 32.0F, (float)(b10 * 360) / 256.0F, (float)(b57 * 360) / 256.0F);
+											}
+										} else {
+											byte b48;
+											NetworkPlayer networkPlayer58;
+											byte b69;
+											if(packet6 == Packet.PLAYER_TELEPORT) {
+												b10001 = ((Byte)object7[0]).byteValue();
+												short s65 = ((Short)object7[1]).shortValue();
+												s10003 = ((Short)object7[2]).shortValue();
+												s10004 = ((Short)object7[3]).shortValue();
+												b69 = ((Byte)object7[4]).byteValue();
+												b10 = ((Byte)object7[5]).byteValue();
+												b48 = b69;
+												s45 = s10004;
+												s36 = s10003;
+												short s35 = s65;
+												b5 = b10001;
+												if(b5 < 0) {
+													client43.minecraft.thePlayer.setPositionAndRotation((float)s35 / 32.0F, (float)s36 / 32.0F, (float)s45 / 32.0F, (float)(b48 * 360) / 256.0F, (float)(b10 * 360) / 256.0F);
+												} else {
+													b48 = (byte)(b48 + 128);
+													s36 = (short)(s36 - 22);
+													if((networkPlayer58 = (NetworkPlayer)client43.players.get(b5)) != null) {
+														networkPlayer58.teleport(s35, s36, s45, (float)(b48 * 360) / 256.0F, (float)(b10 * 360) / 256.0F);
+													}
+												}
+											} else {
+												byte b37;
+												byte b40;
+												byte b50;
+												byte b66;
+												byte b67;
+												if(packet6 == Packet.PLAYER_MOVE_AND_ROTATE) {
+													b10001 = ((Byte)object7[0]).byteValue();
+													b66 = ((Byte)object7[1]).byteValue();
+													b67 = ((Byte)object7[2]).byteValue();
+													byte b68 = ((Byte)object7[3]).byteValue();
+													b69 = ((Byte)object7[4]).byteValue();
+													b10 = ((Byte)object7[5]).byteValue();
+													b48 = b69;
+													b50 = b68;
+													b40 = b67;
+													b37 = b66;
+													b5 = b10001;
+													if(b5 >= 0) {
+														b48 = (byte)(b48 + 128);
+														if((networkPlayer58 = (NetworkPlayer)client43.players.get(b5)) != null) {
+															networkPlayer58.queue(b37, b40, b50, (float)(b48 * 360) / 256.0F, (float)(b10 * 360) / 256.0F);
+														}
+													}
+												} else if(packet6 == Packet.PLAYER_ROTATE) {
+													b10001 = ((Byte)object7[0]).byteValue();
+													b66 = ((Byte)object7[1]).byteValue();
+													b40 = ((Byte)object7[2]).byteValue();
+													b37 = b66;
+													b5 = b10001;
+													if(b5 >= 0) {
+														b37 = (byte)(b37 + 128);
+														NetworkPlayer networkPlayer51;
+														if((networkPlayer51 = (NetworkPlayer)client43.players.get(b5)) != null) {
+															networkPlayer51.queue((float)(b37 * 360) / 256.0F, (float)(b40 * 360) / 256.0F);
+														}
+													}
+												} else if(packet6 == Packet.PLAYER_MOVE) {
+													b10001 = ((Byte)object7[0]).byteValue();
+													b66 = ((Byte)object7[1]).byteValue();
+													b67 = ((Byte)object7[2]).byteValue();
+													b50 = ((Byte)object7[3]).byteValue();
+													b40 = b67;
+													b37 = b66;
+													b5 = b10001;
+													NetworkPlayer networkPlayer52;
+													if(b5 >= 0 && (networkPlayer52 = (NetworkPlayer)client43.players.get(b5)) != null) {
+														networkPlayer52.queue(b37, b40, b50);
+													}
+												} else if(packet6 == Packet.PLAYER_DISCONNECT) {
+													b5 = ((Byte)object7[0]).byteValue();
+													if(b5 >= 0 && (networkPlayer34 = (NetworkPlayer)client43.players.remove(b5)) != null) {
+														networkPlayer34.clear();
+														//client43.minecraft.theWorld.removeEntity(networkPlayer34);
+													}
+												} else if(packet6 == Packet.CHAT_MESSAGE) {
+													b10001 = ((Byte)object7[0]).byteValue();
+													string33 = (String)object7[1];
+													b5 = b10001;
+													if(b5 < 0) {
+														client43.minecraft.ingameGUI.addMessage("&e" + string33);
+													} else {
+														client43.players.get(b5);
+														client43.minecraft.ingameGUI.addMessage(string33);
+													}
+												} else if(packet6 == Packet.KICK_PLAYER) {
+													client43.serverConnection.disconnect();
+													client43.minecraft.displayGuiScreen(new GuiErrorScreen("Connection lost", (String)object7[0]));
+												} else if(packet6 == Packet.USER_TYPE) {
+													client43.minecraft.thePlayer.userType = ((Byte)object7[0]).byteValue();
+												}
+											}
+										}
+									}
+								}
+
+								if(!socketConnection21.connected) {
+									break;
+								}
+
+								socketConnection21.readBuffer.compact();
+							}
+
+							if(socketConnection21.writeBuffer.position() > 0) {
+								socketConnection21.writeBuffer.flip();
+								socketConnection21.socketChannel.write(socketConnection21.writeBuffer);
+								socketConnection21.writeBuffer.compact();
+							}
+						} catch (Exception exception15) {
+							client18.minecraft.displayGuiScreen(new GuiErrorScreen("Disconnected!", "You\'ve lost connection to the server"));
+							client18.minecraft.skipRenderWorld = false;
+							exception15.printStackTrace();
+							client18.serverConnection.disconnect();
+							client18.minecraft.networkClient = null;
+						}
+					}
+				}
+				EntityPlayer player31 = this.thePlayer;
+				client18 = this.networkClient;
+				if(this.networkClient.connected) {
+				    int i23 = (int)(player31.posX * 32.0F);
+				    i41 = (int)(player31.posY * 32.0F);
+				    i38 = (int)(player31.posZ * 32.0F);
+				    i46 = (int)((player31.rotationYaw + 180.0F) * 256.0F / 360.0F) & 255;
+				    i47 = (int)(player31.rotationPitch * 256.0F / 360.0F) & 255;
+				    client18.serverConnection.sendPacket(Packet.PLAYER_TELEPORT, new Object[]{-1, i23, i41, i38, i46, i47});
+				}
+			}
 		}
 
 		if(this.currentScreen == null && this.thePlayer != null && this.thePlayer.health <= 0) {
@@ -647,7 +1013,7 @@ public final class Minecraft implements Runnable {
 									}
 
 									boolean z20 = this.currentScreen == null && Mouse.isButtonDown(0) && this.inventoryScreen;
-									if(!this.playerController.isInTestMode && this.leftClickCounter <= 0) {
+									if(this.playerController != null &&!this.playerController.isInTestMode && this.leftClickCounter <= 0) {
 										if(z20 && this.objectMouseOver != null && this.objectMouseOver.typeOfHit == 0) {
 											i4 = this.objectMouseOver.blockX;
 											i24 = this.objectMouseOver.blockY;
@@ -721,9 +1087,21 @@ public final class Minecraft implements Runnable {
 										this.thePlayer.preparePlayerToSpawn();
 									}
 								}
+								
+								if(Keyboard.getEventKey() == Keyboard.KEY_T && this.networkClient != null && this.networkClient.isConnected()) {
+									this.displayGuiScreen(new ChatScreen());
+								}
 
 								if(Keyboard.getEventKey() == Keyboard.KEY_F5) {
 									this.thirdPersonView = !this.thirdPersonView;
+								}
+								
+								if(Keyboard.getEventKey() == Keyboard.KEY_F) {
+									this.thirdPersonView = !this.thirdPersonView;
+								}
+								
+								if(Keyboard.getEventKey() == Keyboard.KEY_X) {
+									this.thePlayer.flying = !this.thePlayer.flying;
 								}
 
 								if(Keyboard.getEventKey() == this.options.keyBindInventory.keyCode) {
@@ -901,6 +1279,10 @@ public final class Minecraft implements Runnable {
 			}
 		}
 
+	}
+	
+	public final boolean isOnlineClient() {
+		return this.networkClient != null;
 	}
 
 	public final void generateLevel(int i1) {

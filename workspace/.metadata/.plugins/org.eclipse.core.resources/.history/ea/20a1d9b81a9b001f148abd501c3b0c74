@@ -1677,9 +1677,9 @@ public final class Minecraft implements Runnable {
 		}
 
 		if(this.thePlayer == null) {
-			this.thePlayer = new EntityPlayer(world1);
 			if(!this.isOnlineClient()) {
 				this.thePlayer = (EntityPlayer)theWorld.findSubclassOf(EntityPlayer.class);
+			this.thePlayer = new EntityPlayer(world1);
 			this.thePlayer.preparePlayerToSpawn();
 			this.playerController.preparePlayer(this.thePlayer);
 			if(world1 != null) {

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<qualifiedTypeNameHistroy>
+<fullyQualifiedTypeName name="net.minecraft.client.gui.GuiErrorScreen"/>
+<fullyQualifiedTypeName name="net.minecraft.client.net.EntityPos"/>
+<fullyQualifiedTypeName name="net.minecraft.game.entity.AILiving"/>
+<fullyQualifiedTypeName name="java.io.IOException"/>
+<fullyQualifiedTypeName name="java.io.ByteArrayInputStream"/>
+<fullyQualifiedTypeName name="net.minecraft.client.net.SocketConnection"/>
+<fullyQualifiedTypeName name="net.minecraft.client.net.NetworkPlayer"/>
+<fullyQualifiedTypeName name="net.minecraft.client.LoadingScreenRenderer"/>
+<fullyQualifiedTypeName name="java.io.File"/>
+<fullyQualifiedTypeName name="java.io.FileOutputStream"/>
+<fullyQualifiedTypeName name="java.io.OutputStream"/>
+<fullyQualifiedTypeName name="java.io.FileInputStream"/>
+<fullyQualifiedTypeName name="java.io.ByteArrayOutputStream"/>
+<fullyQualifiedTypeName name="java.net.HttpURLConnection"/>
+<fullyQualifiedTypeName name="java.io.DataOutputStream"/>
+<fullyQualifiedTypeName name="java.net.URL"/>
+<fullyQualifiedTypeName name="java.io.BufferedReader"/>
+<fullyQualifiedTypeName name="java.io.InputStreamReader"/>
+<fullyQualifiedTypeName name="java.io.DataInputStream"/>
+<fullyQualifiedTypeName name="java.io.InputStream"/>
+<fullyQualifiedTypeName name="java.util.zip.GZIPInputStream"/>
+<fullyQualifiedTypeName name="net.minecraft.game.level.LevelIO"/>
+<fullyQualifiedTypeName name="net.minecraft.client.gui.GuiChat"/>
+<fullyQualifiedTypeName name="net.minecraft.client.net.Client"/>
+<fullyQualifiedTypeName name="net.minecraft.client.net.Packet"/>
+<fullyQualifiedTypeName name="net.minecraft.client.gui.ChatScreen"/>
+<fullyQualifiedTypeName name="net.minecraft.client.controller.PlayerControllerSP"/>
+<fullyQualifiedTypeName name="org.lwjgl.input.Keyboard"/>
+<fullyQualifiedTypeName name="net.minecraft.client.Minecraft"/>
+</qualifiedTypeNameHistroy>

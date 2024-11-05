@@ -1,0 +1,21 @@
+--- a/net/minecraft/client/controller/PlayerControllerSP.java
++++ b/net/minecraft/client/controller/PlayerControllerSP.java
+@@ -1,6 +1,7 @@
+ package net.minecraft.client.controller;
+ 
+ import net.minecraft.client.LoadingScreenRenderer;
++import net.minecraft.client.Minecraft;
+ import net.minecraft.client.player.EntityPlayer;
+ import net.minecraft.game.entity.Entity;
+ import net.minecraft.game.level.MobSpawner;
+@@ -8,6 +9,10 @@
+ import net.minecraft.game.level.block.Block;
+ 
+ public final class PlayerControllerSP extends PlayerController {
++	public PlayerControllerSP(Minecraft minecraft1) {
++		super(minecraft1);
++	}
++
+ 	private int curBlockX;
+ 	private int curBlockY;
+ 	private int curBlockZ;

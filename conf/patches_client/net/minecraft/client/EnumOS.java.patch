@@ -1,0 +1,17 @@
+--- a/net/minecraft/client/EnumOS.java
++++ b/net/minecraft/client/EnumOS.java
+@@ -7,7 +7,13 @@
+ 	macos,
+ 	unknown;
+ 
++	private static final EnumOS[] osList;
++
+ 	public static EnumOS[] getOsList() {
+-		return (EnumOS[])osList.clone();
++		return EnumOS.osList.clone();
++	}
++
++	static {
++		osList = new EnumOS[] { EnumOS.linux, EnumOS.solaris, EnumOS.windows, EnumOS.macos, EnumOS.unknown };
+ 	}
+ }
